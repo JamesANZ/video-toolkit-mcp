@@ -1,0 +1,47 @@
+{
+  "name": "transcript-mcp",
+  "version": "1.0.0",
+  "description": "Generic MCP server for retrieving video transcripts from multiple platforms (YouTube, Bilibili, Vimeo, etc.)",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "transcript-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "transcript",
+    "video",
+    "subtitles",
+    "youtube",
+    "bilibili",
+    "vimeo",
+    "yt-dlp"
+  ],
+  "author": "James Sangalli",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ]
+}
