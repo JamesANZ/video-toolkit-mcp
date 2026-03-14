@@ -1,84 +1,81 @@
-# Generic Video Transcript MCP Server
+# Video Toolkit MCP Server
 
-A Model Context Protocol (MCP) server that retrieves transcripts from multiple video platforms (YouTube, Bilibili, Vimeo, etc.) using yt-dlp. This server allows you to easily extract video transcripts for analysis, summarization, or content creation.
+A Model Context Protocol (MCP) server that provides comprehensive video tools: transcript retrieval, video downloading, and automatic subtitle generation using AI speech-to-text. Works with YouTube, Bilibili, Vimeo, and any platform supported by yt-dlp.
 
 ## Features
 
 - **Multi-Platform Support**: Works with YouTube, Bilibili, Vimeo, and any platform supported by yt-dlp
-- **Get Video Transcripts**: Extract full transcripts from any video with available captions
+- **Video Transcripts**: Extract existing transcripts/captions from videos
+- **Video Downloads**: Download videos to local storage in various formats and qualities
+- **Auto Subtitle Generation**: Generate subtitles using OpenAI Whisper API or local Whisper
 - **Multiple URL Formats**: Support for various URL formats from different platforms
 - **Timestamp Support**: Include or exclude timestamps in transcript output
-- **Language Selection**: Request transcripts in specific languages when available
-- **Language Listing**: Check available transcript languages for any video
-- **Error Handling**: Graceful handling of videos without transcripts or invalid URLs
+- **Language Selection**: Request transcripts or generate subtitles in specific languages
+
+## Tools
+
+| Tool                        | Description                                        |
+| --------------------------- | -------------------------------------------------- |
+| `get-transcript`            | Retrieve existing transcripts from video platforms |
+| `list-transcript-languages` | List available transcript languages for a video    |
+| `download-video`            | Download videos to local storage                   |
+| `list-downloads`            | List downloaded video files                        |
+| `generate-subtitles`        | Generate subtitles using AI speech-to-text         |
 
 ## Prerequisites
 
 - **Node.js** >= 16.0.0
-- **yt-dlp** must be installed and available in your PATH
+- **yt-dlp** - Required for transcript fetching and video downloads
+- **ffmpeg** - Required for subtitle generation (audio extraction)
 
-### Installing yt-dlp
+### Installing Dependencies
 
-Install yt-dlp using one of the following methods:
-
-**Using pip:**
+**yt-dlp (required):**
 
 ```bash
+# Using Homebrew (macOS)
+brew install yt-dlp
+
+# Using pip
 pip install yt-dlp
 ```
 
-**Using Homebrew (macOS):**
+**ffmpeg (required for subtitle generation):**
 
 ```bash
-brew install yt-dlp
+# Using Homebrew (macOS)
+brew install ffmpeg
+
+# Using apt (Ubuntu/Debian)
+sudo apt install ffmpeg
 ```
 
-**Using pipx:**
+**Local Whisper (optional, for local subtitle generation):**
 
 ```bash
-pipx install yt-dlp
-```
-
-**Or download from:** https://github.com/yt-dlp/yt-dlp
-
-Verify installation:
-
-```bash
-yt-dlp --version
+pip install openai-whisper
 ```
 
 ## Installation
 
-### Option 1: Install from Source
-
-1. Clone this repository:
+### From Source
 
 ```bash
 git clone <repository-url>
-cd transcript-mcp
-```
-
-2. Install dependencies:
-
-```bash
+cd video-toolkit-mcp
 npm install
-```
-
-3. Build the project:
-
-```bash
 npm run build
 ```
 
-### Option 2: Global Installation (after publishing)
+### Global Installation (after publishing)
 
 ```bash
-npm install -g transcript-mcp
+npm install -g video-toolkit-mcp
 ```
 
 ## Configuration
 
-### For Claude Desktop / Claude Code
+### For Claude Desktop / Cursor
 
 Add the MCP server to your configuration file:
 
@@ -87,89 +84,157 @@ Add the MCP server to your configuration file:
 ```json
 {
   "mcpServers": {
-    "transcript-mcp": {
+    "video-toolkit-mcp": {
       "command": "node",
-      "args": ["/path/to/transcript-mcp/dist/index.js"]
+      "args": ["/path/to/video-toolkit-mcp/dist/index.js"],
+      "env": {
+        "VIDEO_TOOLKIT_STORAGE_DIR": "/path/to/downloads",
+        "OPENAI_API_KEY": "your-openai-api-key"
+      }
     }
   }
 }
 ```
 
-**Claude Code** (`~/.claude.json`):
+**Cursor** (`~/.cursor/mcp.json`):
 
 ```json
 {
   "mcpServers": {
-    "transcript-mcp": {
+    "video-toolkit-mcp": {
       "command": "node",
-      "args": ["/path/to/transcript-mcp/dist/index.js"]
+      "args": ["/path/to/video-toolkit-mcp/dist/index.js"],
+      "env": {
+        "VIDEO_TOOLKIT_STORAGE_DIR": "/path/to/downloads",
+        "OPENAI_API_KEY": "your-openai-api-key"
+      }
     }
   }
 }
 ```
 
-If installed globally:
+### Environment Variables
 
-```json
-{
-  "mcpServers": {
-    "transcript-mcp": {
-      "command": "transcript-mcp"
-    }
-  }
-}
-```
+| Variable                       | Description                                            | Default                      |
+| ------------------------------ | ------------------------------------------------------ | ---------------------------- |
+| `VIDEO_TOOLKIT_STORAGE_DIR`    | Default directory for downloaded videos                | `~/.video-toolkit/downloads` |
+| `OPENAI_API_KEY`               | OpenAI API key for Whisper-based subtitle generation   | None                         |
+| `VIDEO_TOOLKIT_WHISPER_ENGINE` | Preferred whisper engine: `openai`, `local`, or `auto` | `auto`                       |
+| `WHISPER_BINARY_PATH`          | Path to local whisper binary                           | `whisper`                    |
+| `WHISPER_MODEL_PATH`           | Path to whisper model (for local whisper)              | Auto-download                |
+| `YT_DLP_PATH`                  | Path to yt-dlp binary                                  | `yt-dlp`                     |
+| `FFMPEG_PATH`                  | Path to ffmpeg binary                                  | `ffmpeg`                     |
+| `DEBUG`                        | Enable debug logging                                   | `0`                          |
 
 ## Usage
 
-Once configured, restart Claude Desktop/Claude Code. The following tools will be available:
-
 ### 1. get-transcript
 
-Retrieve the transcript of a video from any supported platform.
+Retrieve existing transcripts from video platforms.
 
 **Parameters:**
 
-- `url` (required): Video URL from any supported platform
-- `lang` (optional): Language code for transcript (e.g., 'en', 'es', 'fr', 'zh'). Default: video's default language
-- `include_timestamps` (optional): Include timestamps in output. Default: true
-
-**Supported Platforms:**
-
-- YouTube: `https://www.youtube.com/watch?v=VIDEO_ID`, `https://youtu.be/VIDEO_ID`
-- Bilibili: `https://www.bilibili.com/video/BVxxxxx`, `https://b23.tv/xxxxx`
-- Vimeo: `https://vimeo.com/123456789`
-- Any platform supported by yt-dlp
-
-**Examples:**
-
-```
-Get the transcript from https://www.youtube.com/watch?v=dQw4w9WgXcQ
-```
-
-```
-Get the transcript without timestamps from https://www.bilibili.com/video/BV1xx411c7mu
-```
-
-```
-Get the Chinese transcript from this video: https://www.bilibili.com/video/BV1xx411c7mu lang=zh
-```
-
-### 2. list-transcript-languages
-
-List all available transcript languages for a video.
-
-**Parameters:**
-
-- `url` (required): Video URL from any supported platform
+- `url` (required): Video URL
+- `lang` (optional): Language code (e.g., 'en', 'es', 'zh')
+- `include_timestamps` (optional): Include timestamps (default: true)
 
 **Example:**
 
 ```
-What transcript languages are available for https://www.youtube.com/watch?v=dQw4w9WgXcQ?
+Get the transcript from https://www.youtube.com/watch?v=VIDEO_ID
 ```
 
+### 2. list-transcript-languages
+
+List available transcript languages for a video.
+
+**Parameters:**
+
+- `url` (required): Video URL
+
+**Example:**
+
+```
+What transcript languages are available for https://www.youtube.com/watch?v=VIDEO_ID?
+```
+
+### 3. download-video
+
+Download a video to local storage.
+
+**Parameters:**
+
+- `url` (required): Video URL to download
+- `output_dir` (optional): Custom output directory
+- `filename` (optional): Custom filename
+- `format` (optional): Video format - `mp4`, `webm`, `mkv` (default: mp4)
+- `quality` (optional): Quality - `best`, `1080p`, `720p`, `480p`, `360p`, `audio` (default: best)
+
+**Example:**
+
+```
+Download this video: https://www.youtube.com/watch?v=VIDEO_ID
+```
+
+### 4. list-downloads
+
+List all downloaded video files.
+
+**Parameters:**
+
+- `directory` (optional): Directory to list (default: storage directory)
+
+**Example:**
+
+```
+List my downloaded videos
+```
+
+### 5. generate-subtitles
+
+Generate subtitles for a local video file using AI speech-to-text.
+
+**Parameters:**
+
+- `video_path` (required): Absolute path to the video file
+- `engine` (optional): `openai` or `local` (default: auto-detect)
+- `language` (optional): Language code for transcription
+- `output_format` (optional): `srt` or `vtt` (default: srt)
+
+**Example:**
+
+```
+Generate subtitles for /path/to/video.mp4
+```
+
+## Subtitle Generation Engines
+
+### OpenAI Whisper API
+
+- **Pros**: High accuracy, no local setup needed, supports 50+ languages
+- **Cons**: Requires API key, costs per audio minute
+- **Setup**: Set `OPENAI_API_KEY` environment variable
+
+### Local Whisper
+
+- **Pros**: Free, runs locally, no API limits
+- **Cons**: Requires setup, uses local CPU/GPU
+- **Setup**: `pip install openai-whisper`
+
+The tool auto-detects which engine to use:
+
+1. If `OPENAI_API_KEY` is set, uses OpenAI Whisper
+2. If local whisper is installed, uses local whisper
+3. Returns an error if neither is available
+
 ## Example Workflows
+
+### Download and Generate Subtitles
+
+```
+1. Download this video: https://www.youtube.com/watch?v=VIDEO_ID
+2. Generate subtitles for the downloaded file
+```
 
 ### Summarize a Video
 
@@ -177,71 +242,37 @@ What transcript languages are available for https://www.youtube.com/watch?v=dQw4
 Get the transcript from https://www.youtube.com/watch?v=VIDEO_ID and summarize the key points
 ```
 
-### Extract Quotes
+### Create Captions for Videos Without Subtitles
 
 ```
-Get the transcript without timestamps from https://www.youtube.com/watch?v=VIDEO_ID and extract 3 key quotes
+1. Download the video: https://vimeo.com/123456789
+2. Generate English subtitles for it
 ```
 
-### Multi-Language Support
+## Supported Platforms
+
+Any platform supported by yt-dlp, including:
+
+- YouTube
+- Bilibili
+- Vimeo
+- Twitter/X
+- TikTok
+- Twitch
+- And many more...
+
+Full list: https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md
+
+## Project Structure
 
 ```
-What languages are available for https://www.bilibili.com/video/BVxxxxx?
-Get the English transcript if available, otherwise get the default language
-```
-
-### Content Creation
-
-```
-Get the transcript from this tutorial video and extract all code examples mentioned
-```
-
-## Platform Support
-
-This MCP server supports any video platform that yt-dlp supports, including:
-
-- **YouTube** - Full support
-- **Bilibili** - Full support
-- **Vimeo** - Full support
-- **Many others** - Any platform supported by yt-dlp
-
-For a complete list of supported platforms, see: https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md
-
-## Technical Details
-
-- Built with TypeScript and the [@modelcontextprotocol/sdk](https://www.npmjs.com/package/@modelcontextprotocol/sdk)
-- Uses yt-dlp as a subprocess for transcript extraction
-- Supports SRT, VTT, and JSON subtitle formats
-- Runs as a local Node.js process communicating via stdio
-- Zero external dependencies for transcript parsing (uses native Node.js APIs)
-
-## Development
-
-### Building
-
-```bash
-npm run build
-```
-
-### Testing
-
-```bash
-npm test
-```
-
-### Running in Development Mode
-
-```bash
-npm run dev
-```
-
-### Project Structure
-
-```
-transcript-mcp/
+video-toolkit-mcp/
 ├── src/
 │   ├── index.ts              # Main MCP server entry point
-│   ├── transcript-fetcher.ts # Core transcript fetching using yt-dlp
+│   ├── transcript-fetcher.ts # Transcript fetching using yt-dlp
+│   ├── video-downloader.ts   # Video download functionality
+│   ├── subtitle-generator.ts # AI-powered subtitle generation
+│   ├── config.ts             # Configuration management
 │   ├── url-detector.ts       # Platform detection from URLs
 │   ├── parser.ts             # Transcript parsing (SRT, VTT, JSON)
 │   └── errors.ts             # Custom error classes
@@ -251,59 +282,60 @@ transcript-mcp/
 └── package.json
 ```
 
-## Troubleshooting
-
-### "yt-dlp is not installed" Error
-
-Make sure yt-dlp is installed and available in your PATH:
+## Development
 
 ```bash
-yt-dlp --version
+# Build
+npm run build
+
+# Test
+npm test
+
+# Development mode
+npm run dev
 ```
 
-If it's not found, install it using one of the methods in the Prerequisites section.
+## Troubleshooting
 
-### "No transcript available" Errors
+### "yt-dlp is not installed"
 
-- Not all videos have transcripts/subtitles
-- Some videos only have auto-generated captions in certain languages
-- Private or restricted videos cannot be accessed
-- Try checking if the video has captions enabled on the platform
+```bash
+brew install yt-dlp
+# or
+pip install yt-dlp
+```
 
-### "Platform not supported" Errors
+### "ffmpeg is not installed"
 
-- The server uses yt-dlp which supports many platforms
-- If a platform isn't working, check if yt-dlp supports it: `yt-dlp --list-extractors`
-- Some platforms may require login or have region restrictions
+```bash
+brew install ffmpeg
+```
 
-### Language Not Found
+### "No Whisper engine available"
 
-- Use the `list-transcript-languages` tool to check available languages
-- Common language codes: 'en', 'es', 'fr', 'de', 'ja', 'ko', 'pt', 'ru', 'zh', etc.
-- Not all videos have transcripts in all languages
+Either:
 
-### Invalid URL Errors
+- Set `OPENAI_API_KEY` environment variable, or
+- Install local whisper: `pip install openai-whisper`
 
-- Ensure you're using a valid video URL format
-- Make sure the video exists and is publicly accessible
-- Some platforms have specific URL formats (check platform documentation)
+### Download issues
 
-## Limitations
+- Check if the video is publicly accessible
+- Some platforms may have rate limits
+- Private/restricted videos cannot be downloaded
 
-- Requires yt-dlp to be installed separately
-- Transcript availability depends on the video platform and video settings
-- Some platforms may rate-limit requests
-- Very long transcripts may exceed MCP token limits (use `include_timestamps: false` for long videos)
+### Subtitle generation is slow
+
+- OpenAI Whisper API is faster than local
+- Local whisper performance depends on your hardware
+- Consider using a smaller model for local whisper
 
 ## License
 
 MIT
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues or pull requests.
-
 ## Acknowledgments
 
-- Built on top of [yt-dlp](https://github.com/yt-dlp/yt-dlp) for multi-platform video support
-- Inspired by the [youtube-transcript-mcp](https://github.com/hancengiz/youtube-transcript-mcp) project
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) for video platform support
+- [OpenAI Whisper](https://openai.com/research/whisper) for speech-to-text
+- [Model Context Protocol](https://modelcontextprotocol.io/) for the MCP framework

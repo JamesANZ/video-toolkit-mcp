@@ -11,6 +11,9 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { TranscriptFetcher } from "./transcript-fetcher.js";
 import { validateUrl } from "./url-detector.js";
+import { getConfig, Config } from "./config.js";
+import { VideoDownloader } from "./video-downloader.js";
+import { SubtitleGenerator, WhisperEngineType } from "./subtitle-generator.js";
 
 // Get package.json path for version info
 const __filename = fileURLToPath(import.meta.url);
@@ -28,11 +31,14 @@ const VERSION = packageJson.version;
 class TranscriptMCPServer {
   private server: Server;
   private fetcher: TranscriptFetcher;
+  private downloader: VideoDownloader;
+  private subtitleGenerator: SubtitleGenerator;
+  private config: Config;
 
   constructor() {
     this.server = new Server(
       {
-        name: "transcript-mcp-server",
+        name: "video-toolkit-mcp-server",
         version: VERSION,
       },
       {
@@ -42,10 +48,19 @@ class TranscriptMCPServer {
       },
     );
 
+    // Initialize configuration
+    this.config = getConfig();
+
     // Initialize transcript fetcher
     this.fetcher = new TranscriptFetcher({
-      debug: process.env.DEBUG === "1",
+      debug: this.config.debug,
     });
+
+    // Initialize video downloader
+    this.downloader = new VideoDownloader(this.config);
+
+    // Initialize subtitle generator
+    this.subtitleGenerator = new SubtitleGenerator(this.config);
 
     this.setupHandlers();
     this.setupErrorHandling();
@@ -112,6 +127,95 @@ class TranscriptMCPServer {
             additionalProperties: false,
           },
         },
+        {
+          name: "download-video",
+          description:
+            "Download a video from any supported platform (YouTube, Vimeo, etc.) to local storage. Returns the file path of the downloaded video.",
+          inputSchema: {
+            $schema: "https://json-schema.org/draft/2020-12/schema",
+            type: "object",
+            properties: {
+              url: {
+                type: "string",
+                description:
+                  "Video URL from any supported platform (e.g., YouTube, Vimeo)",
+              },
+              output_dir: {
+                type: "string",
+                description:
+                  "Custom output directory. Default: configured storage directory",
+              },
+              filename: {
+                type: "string",
+                description:
+                  "Custom filename for the downloaded video. Default: video title",
+              },
+              format: {
+                type: "string",
+                enum: ["mp4", "webm", "mkv"],
+                description: "Output video format. Default: mp4",
+              },
+              quality: {
+                type: "string",
+                enum: ["best", "1080p", "720p", "480p", "360p", "audio"],
+                description: "Video quality. Default: best",
+              },
+            },
+            required: ["url"],
+            additionalProperties: false,
+          },
+        },
+        {
+          name: "list-downloads",
+          description:
+            "List all downloaded video files in the storage directory or a specified directory.",
+          inputSchema: {
+            $schema: "https://json-schema.org/draft/2020-12/schema",
+            type: "object",
+            properties: {
+              directory: {
+                type: "string",
+                description:
+                  "Directory to list. Default: configured storage directory",
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+        {
+          name: "generate-subtitles",
+          description:
+            "Generate subtitles for a local video file using AI speech-to-text (OpenAI Whisper or local whisper). Creates an SRT or VTT file alongside the video.",
+          inputSchema: {
+            $schema: "https://json-schema.org/draft/2020-12/schema",
+            type: "object",
+            properties: {
+              video_path: {
+                type: "string",
+                description:
+                  "Absolute path to the local video file to generate subtitles for",
+              },
+              engine: {
+                type: "string",
+                enum: ["openai", "local"],
+                description:
+                  "Whisper engine to use. 'openai' uses OpenAI Whisper API (requires OPENAI_API_KEY), 'local' uses locally installed whisper. Default: auto-detect",
+              },
+              language: {
+                type: "string",
+                description:
+                  "Language code for transcription (e.g., 'en', 'es', 'fr'). Default: auto-detect",
+              },
+              output_format: {
+                type: "string",
+                enum: ["srt", "vtt"],
+                description: "Subtitle format. Default: srt",
+              },
+            },
+            required: ["video_path"],
+            additionalProperties: false,
+          },
+        },
       ],
     }));
 
@@ -135,6 +239,29 @@ class TranscriptMCPServer {
             );
           case "list-transcript-languages":
             return await this.handleListLanguages(args as { url: string });
+          case "download-video":
+            return await this.handleDownloadVideo(
+              args as {
+                url: string;
+                output_dir?: string;
+                filename?: string;
+                format?: string;
+                quality?: string;
+              },
+            );
+          case "list-downloads":
+            return await this.handleListDownloads(
+              args as { directory?: string },
+            );
+          case "generate-subtitles":
+            return await this.handleGenerateSubtitles(
+              args as {
+                video_path: string;
+                engine?: string;
+                language?: string;
+                output_format?: string;
+              },
+            );
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -284,10 +411,172 @@ class TranscriptMCPServer {
     }
   }
 
+  private async handleDownloadVideo(args: {
+    url: string;
+    output_dir?: string;
+    filename?: string;
+    format?: string;
+    quality?: string;
+  }): Promise<{
+    content: Array<{ type: string; text: string }>;
+    isError?: boolean;
+  }> {
+    const { url, output_dir, filename, format, quality } = args;
+
+    // Validate URL
+    validateUrl(url);
+
+    try {
+      const result = await this.downloader.downloadVideo({
+        url,
+        outputDir: output_dir,
+        filename,
+        format,
+        quality,
+      });
+
+      const formattedSize = VideoDownloader.formatFileSize(result.fileSize);
+      const formattedDuration = VideoDownloader.formatDuration(result.duration);
+
+      const output = [
+        `Video Downloaded Successfully`,
+        ``,
+        `Title: ${result.title}`,
+        `Duration: ${formattedDuration}`,
+        `Size: ${formattedSize}`,
+        `Format: ${result.format}`,
+        ``,
+        `File saved to: ${result.filePath}`,
+      ].join("\n");
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: output,
+          },
+        ],
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to download video: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async handleListDownloads(args: { directory?: string }): Promise<{
+    content: Array<{ type: string; text: string }>;
+    isError?: boolean;
+  }> {
+    const { directory } = args;
+
+    try {
+      const downloads = await this.downloader.listDownloads(directory);
+      const targetDir = directory || this.config.storageDir;
+
+      if (downloads.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `No video files found in: ${targetDir}`,
+            },
+          ],
+        };
+      }
+
+      const fileList = downloads
+        .map((file, index) => {
+          const size = VideoDownloader.formatFileSize(file.size);
+          const date = file.createdAt.toLocaleDateString();
+          return `${index + 1}. ${file.filename}\n   Size: ${size} | Downloaded: ${date}\n   Path: ${file.path}`;
+        })
+        .join("\n\n");
+
+      const output = [
+        `Downloaded Videos (${downloads.length} files)`,
+        `Directory: ${targetDir}`,
+        ``,
+        fileList,
+      ].join("\n");
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: output,
+          },
+        ],
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to list downloads: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async handleGenerateSubtitles(args: {
+    video_path: string;
+    engine?: string;
+    language?: string;
+    output_format?: string;
+  }): Promise<{
+    content: Array<{ type: string; text: string }>;
+    isError?: boolean;
+  }> {
+    const { video_path, engine, language, output_format } = args;
+
+    try {
+      // Check available engines first
+      const availableEngines =
+        await this.subtitleGenerator.getAvailableEngines();
+
+      if (availableEngines.length === 0) {
+        throw new Error(
+          "No subtitle generation engine available. Either:\n" +
+            "- Set OPENAI_API_KEY environment variable for OpenAI Whisper, or\n" +
+            "- Install whisper locally: pip install openai-whisper",
+        );
+      }
+
+      const result = await this.subtitleGenerator.generateSubtitles({
+        videoPath: video_path,
+        engine: engine as WhisperEngineType | undefined,
+        language,
+        outputFormat: output_format as "srt" | "vtt" | undefined,
+      });
+
+      const formattedDuration = VideoDownloader.formatDuration(result.duration);
+
+      const output = [
+        `Subtitles Generated Successfully`,
+        ``,
+        `Engine: ${result.engine === "openai" ? "OpenAI Whisper API" : "Local Whisper"}`,
+        `Language: ${result.language}`,
+        `Duration: ${formattedDuration}`,
+        ``,
+        `Subtitle file saved to: ${result.subtitlePath}`,
+      ].join("\n");
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: output,
+          },
+        ],
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to generate subtitles: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   async start(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error(`Transcript MCP Server v${VERSION} running on stdio`);
+    console.error(`Video Toolkit MCP Server v${VERSION} running on stdio`);
   }
 }
 
