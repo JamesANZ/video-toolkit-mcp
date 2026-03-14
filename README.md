@@ -2,6 +2,10 @@
 
 A Model Context Protocol (MCP) server that provides comprehensive video tools: transcript retrieval, video downloading, and automatic subtitle generation using AI speech-to-text. Works with YouTube, Bilibili, Vimeo, and any platform supported by yt-dlp.
 
+<a href="https://glama.ai/mcp/servers/JamesANZ/video-toolkit-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/JamesANZ/video-toolkit-mcp/badge" alt="video-toolkit-mcp MCP server" />
+</a>
+
 ## Features
 
 - **Multi-Platform Support**: Works with YouTube, Bilibili, Vimeo, and any platform supported by yt-dlp
